@@ -1,0 +1,15 @@
+skip: false
+rule_name: 'Mapping Count: asset_a in pii.exchangedb_exchange_config_account_type'
+description: >
+  Number of mapping values should be align with number of distinct values
+  in exchangedb
+schedule: hourly
+notify_slack_channels:
+  - data-checkout-alert
+database_a: edw
+query_a: >
+  SELECT COUNT(*) FROM map.map_exchange_config_account_type_asset_a;
+database_b: athena
+query_b: >
+  SELECT COUNT(DISTINCT asset_a) FROM presto_edw_pii.exchangedb_exchange_config_account_type;
+alert_when: a < b

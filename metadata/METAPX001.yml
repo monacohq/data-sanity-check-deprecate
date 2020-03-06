@@ -1,0 +1,27 @@
+skip: false
+rule_name: METAPX001
+description: >
+  Project X Metadata
+
+
+  Check if there is duplicates or missing orders for joining
+
+  -- Threshold: 3 hours
+schedule: daily
+notify_slack_channels:
+  - data-checkout-alert
+database_a: athena
+query_a: >
+  -- Threshold: 3 hours
+
+  SELECT COUNT(*) - COUNT(exorder_order_price)
+
+  FROM presto_edw_metadata.projx_t_transactions
+
+  WHERE extransaction_transaction_scene like ''%order''
+
+  AND extransaction_created_at <= (SELECT DATE_TRUNC(''hour'', MAX(extransaction_created_at))
+  - interval ''2'' hour FROM presto_edw_metadata.projx_t_transactions)
+database_b: null
+query_b: null
+alert_when: a > 0

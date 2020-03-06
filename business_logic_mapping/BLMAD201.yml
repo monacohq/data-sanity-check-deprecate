@@ -1,0 +1,64 @@
+skip: false
+rule_name: BLMAD201
+description: >
+  [Business Logic] Airdrop Release
+
+
+  Check if # of txid in exchangedb.transaction_deposit_crypto(FK) and # of id in proddb.cro_airdrop_exchange_payment_views(PK)
+  are the same
+
+  Check if all foreign key can be found from the primary key in another table (same
+  type of transaction)
+
+
+  * Only included done transactions in proddb.cro_airdrop_exchange_payment_views as
+  per business logic'
+schedule: daily
+notify_slack_channels:
+  - data-checkout-alert
+database_a: athena
+query_a: >
+  WITH last_update_time AS (
+    SELECT
+      DATE_TRUNC('hour', MAX(created_at)) AS last_updated_at
+    FROM presto_edw_nonpii.proddb_cro_airdrop_exchange_payment_views
+    UNION ALL
+    SELECT
+      DATE_TRUNC('hour', MAX(updated_at)) AS last_updated_at
+    FROM presto_edw_nonpii.exchangedb_exchange_transaction_deposit_crypto
+  ), a AS (
+    SELECT
+      id
+    FROM presto_edw_nonpii.proddb_cro_airdrop_exchange_payment_views
+    WHERE
+      status = 'done'
+      AND updated_at <= (SELECT MIN(last_updated_at) FROM last_update_time)
+  ), b AS (
+    SELECT
+      id,
+      txid
+    FROM presto_edw_nonpii.exchangedb_exchange_transaction_deposit_crypto 
+    WHERE
+      deposit_source = 'AIRDROP_DEPOSIT'
+      AND updated_at <= (
+        SELECT MIN(last_updated_at)
+        FROM last_update_time
+      )
+  ), diff_tbl AS (
+    SELECT
+      COUNT(a.id) AS a_id_amount,
+      COUNT(b.id) AS b_id_amount
+   FROM a
+   FULL JOIN b
+   ON a.id = b.txid
+   WHERE (a.id IS NULL OR b.id IS NULL)
+  )
+  SELECT
+    'airdrop_payment > transaction_deposit: '||
+      CAST(a_id_amount AS varchar) ||
+      ', transaction_deposit > airdrop_payment: '||
+      CAST(b_id_amount AS varchar)
+  FROM diff_tbl
+database_b: null
+query_b: null
+alert_when: a is not None
